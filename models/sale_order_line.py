@@ -17,6 +17,12 @@ class SaleOrderLine(models.Model):
         help='Surgery case created from this sales order line'
     )
 
+    @api.onchange('product_id')
+    def _onchange_product_informational(self):
+        """Copy informational flag from product to SO line"""
+        if self.product_id and self.product_id.is_informational:
+            self.is_informational = True
+
     @api.depends('is_informational', 'product_uom_qty', 'qty_delivered', 'qty_invoiced')
     def _compute_qty_to_invoice(self):
         """Prevent informational lines from appearing as 'to invoice'"""
