@@ -4,5 +4,7 @@ from . import surgery_medical_item
 from . import surgery_drug_restriction
 from . import res_partner
 from . import hr_employee
+from . import sale_order
 from . import sale_order_line
 from . import calendar_event
+from . import product_template

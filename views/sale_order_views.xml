@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Add Surgery Cases smart button to Sale Order form -->
+    <record id="view_order_form_surgery_button" model="ir.ui.view">
+        <field name="name">sale.order.form.surgery.button</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_surgery_cases"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-heartbeat"
+                        invisible="surgery_case_count == 0">
+                    <field name="surgery_case_count" widget="statinfo" string="Surgery Cases"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

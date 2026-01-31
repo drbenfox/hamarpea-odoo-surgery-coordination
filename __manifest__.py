@@ -35,6 +35,7 @@ Track patient journey through surgery with:
         'views/res_partner_views.xml',
         'views/hr_employee_views.xml',
         'views/surgery_case_views.xml',
+        'views/sale_order_views.xml',
         'views/menu_views.xml',
     ],
     'installable': True,
