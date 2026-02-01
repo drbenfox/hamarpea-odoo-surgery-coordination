@@ -13,6 +13,13 @@
               action="action_surgery_case"
               sequence="10"/>
 
+    <!-- Indirect Payments Menu -->
+    <menuitem id="menu_indirect_payments"
+              name="Indirect Payments"
+              parent="menu_surgery_root"
+              action="action_indirect_payments"
+              sequence="20"/>
+
     <!-- Configuration Menu -->
     <menuitem id="menu_surgery_config"
               name="Configuration"

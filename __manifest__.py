@@ -29,8 +29,10 @@ Track patient journey through surgery with:
     'data': [
         'security/ir.model.access.csv',
         'data/surgery_stage_data.xml',
+        'wizard/generate_reconciliation_so_views.xml',
         'views/surgery_stage_views.xml',
         'views/surgery_medical_item_views.xml',
+        'views/surgery_payment_line_views.xml',
         'views/surgery_drug_restriction_views.xml',
         'views/res_partner_views.xml',
         'views/hr_employee_views.xml',

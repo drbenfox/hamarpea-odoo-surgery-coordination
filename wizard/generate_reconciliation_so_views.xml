@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Wizard Form View -->
+    <record id="view_generate_reconciliation_so_form" model="ir.ui.view">
+        <field name="name">surgery.generate.reconciliation.so.form</field>
+        <field name="model">surgery.generate.reconciliation.so</field>
+        <field name="arch" type="xml">
+            <form string="Generate Reconciliation Invoice">
+                <group>
+                    <group>
+                        <field name="partner_id"/>
+                        <field name="line_count"/>
+                        <field name="currency_id" invisible="1"/>
+                    </group>
+                    <group>
+                        <field name="gross_amount"/>
+                        <field name="fee_amount"/>
+                        <field name="net_amount" class="fw-bold text-primary"/>
+                    </group>
+                </group>
+                <group string="Payment Lines to Reconcile">
+                    <field name="payment_line_ids" nolabel="1" readonly="1">
+                        <list>
+                            <field name="surgery_case_id" string="Case #"/>
+                            <field name="patient_id" string="Client"/>
+                            <field name="reference" string="Claim #"/>
+                            <field name="expected_amount" string="Amount" sum="Total"/>
+                        </list>
+                    </field>
+                </group>
+                <footer>
+                    <button name="action_generate_so"
+                            string="Generate Invoice"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open wizard -->
+    <record id="action_generate_reconciliation_so" model="ir.actions.act_window">
+        <field name="name">Generate Reconciliation Invoice</field>
+        <field name="res_model">surgery.generate.reconciliation.so</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="model_surgery_payment_line"/>
+        <field name="binding_view_types">list</field>
+    </record>
+</odoo>

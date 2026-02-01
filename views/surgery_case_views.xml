@@ -72,35 +72,52 @@
                     <notebook>
                         <!-- Tab 1: Financials -->
                         <page string="Financials" name="financials">
+                            <field name="currency_id" invisible="1"/>
+                            <field name="payment_plan_valid" invisible="1"/>
+
+                            <!-- Sale Order Section -->
                             <group>
                                 <group string="Sale Order">
                                     <field name="sale_order_id"/>
-                                    <field name="deposit_paid" widget="boolean"/>
-                                    <field name="currency_id" invisible="1"/>
+                                    <field name="sale_order_total" invisible="not sale_order_id"/>
+                                    <field name="so_status" widget="badge" invisible="not sale_order_id"
+                                           decoration-muted="so_status == 'no_so'"
+                                           decoration-info="so_status == 'draft'"
+                                           decoration-warning="so_status == 'confirmed'"
+                                           decoration-success="so_status == 'payment_complete'"/>
                                 </group>
-
                                 <group string="Insurance">
                                     <label for="insurance_company_id"/>
                                     <div class="o_row">
-                                        <field name="insurance_company_id"
-                                               options="{'no_create': True}"
-                                               class="oe_inline"/>
+                                        <field name="insurance_company_id" class="oe_inline" options="{'no_create': True}"/>
                                         <field name="insurance_privilege_warning" invisible="1"/>
-                                        <span invisible="not insurance_privilege_warning" class="text-warning" title="Surgeon may not have privileges with this insurance company">
+                                        <span invisible="not insurance_privilege_warning" class="text-warning" title="Surgeon does not have privileges with this insurance company">
                                             <i class="fa fa-exclamation-triangle fa-lg"/>
                                         </span>
                                     </div>
-                                    <field name="is_contracted_insurance"
-                                           invisible="not insurance_company_id"/>
-                                    <field name="insurance_claim_number"
-                                           invisible="not insurance_company_id"/>
-                                    <field name="insurance_claim_status"
-                                           invisible="not insurance_company_id"/>
-                                    <field name="insurance_approved_amount"
-                                           invisible="not insurance_company_id"/>
+                                    <field name="is_contracted_insurance" readonly="1" invisible="not insurance_company_id"/>
                                 </group>
                             </group>
 
+                            <!-- Payment Plan Warning -->
+                            <div class="alert alert-warning" role="alert"
+                                 invisible="payment_plan_valid or not sale_order_id">
+                                <i class="fa fa-warning"/> <field name="payment_plan_warning" nolabel="1" readonly="1"/>
+                            </div>
+
+                            <!-- Payment Lines -->
+                            <group string="Payment Plan">
+                                <button name="action_sync_client_payments"
+                                        string="Sync Client Payments"
+                                        type="object"
+                                        class="btn-secondary mb-2"
+                                        icon="fa-refresh"
+                                        invisible="not sale_order_id"/>
+                                <field name="payment_line_ids" nolabel="1"
+                                       context="{'list_view_ref': 'hamarpea-odoo-surgery-coordination.view_surgery_payment_line_list'}"/>
+                            </group>
+
+                            <!-- Surgery Plan Section -->
                             <group string="Surgery Plan">
                                 <field name="surgery_plan" nolabel="1" placeholder="Doctor describes planned procedures here. Coordinator uses this to build the Sale Order."/>
                             </group>
@@ -178,6 +195,7 @@
                 <field name="ready_for_scheduling"/>
                 <field name="ready_for_surgery"/>
                 <field name="stage_id"/>
+                <field name="so_status"/>
                 <templates>
                     <t t-name="kanban-box">
                         <div class="oe_kanban_card oe_kanban_global_click">
@@ -207,9 +225,10 @@
 
                                 <div class="o_kanban_record_bottom">
                                     <div class="oe_kanban_bottom_left">
-                                        <span t-if="record.ready_for_surgery.raw_value" class="badge rounded-pill text-bg-success">✅ Ready for Surgery</span>
-                                        <span t-elif="record.ready_for_scheduling.raw_value" class="badge rounded-pill text-bg-info">📅 Ready to Schedule</span>
-                                        <span t-if="record.medical_status.raw_value == 'review_needed'" class="badge rounded-pill text-bg-warning">⚠️ Medical Review</span>
+                                        <span t-if="record.so_status.raw_value == 'payment_complete'" class="badge rounded-pill text-bg-success">Paid</span>
+                                        <span t-elif="record.so_status.raw_value == 'confirmed'" class="badge rounded-pill text-bg-warning">SO Confirmed</span>
+                                        <span t-elif="record.so_status.raw_value == 'draft'" class="badge rounded-pill text-bg-secondary">SO Draft</span>
+                                        <span t-if="record.medical_status.raw_value == 'review_needed'" class="badge rounded-pill text-bg-danger ms-1">Medical Review</span>
                                     </div>
                                     <div class="oe_kanban_bottom_right">
                                         <field name="surgeon_user_id" widget="many2one_avatar_user"/>

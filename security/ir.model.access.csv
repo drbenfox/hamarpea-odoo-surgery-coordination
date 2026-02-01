@@ -5,3 +5,5 @@ access_surgery_stage_manager,surgery.stage.manager,model_surgery_stage,base.grou
 access_surgery_medical_item_all,surgery.medical.item.all,model_surgery_medical_item,base.group_user,1,1,1,1
 access_surgery_drug_restriction_all,surgery.drug.restriction.all,model_surgery_drug_restriction,base.group_user,1,1,1,0
 access_surgery_drug_restriction_manager,surgery.drug.restriction.manager,model_surgery_drug_restriction,base.group_system,1,1,1,1
+access_surgery_payment_line_all,surgery.payment.line.all,model_surgery_payment_line,base.group_user,1,1,1,1
+access_surgery_generate_reconciliation_so,surgery.generate.reconciliation.so.all,model_surgery_generate_reconciliation_so,base.group_user,1,1,1,1

@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Surgery Payment Line Form View -->
+    <record id="view_surgery_payment_line_form" model="ir.ui.view">
+        <field name="name">surgery.payment.line.form</field>
+        <field name="model">surgery.payment.line</field>
+        <field name="arch" type="xml">
+            <form string="Payment Line">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="surgery_case_id" invisible="1"/>
+                            <field name="payment_source"/>
+                            <field name="partner_id"
+                                   invisible="payment_source == 'client'"
+                                   domain="[('account_type', 'in', ['private_insurance', 'kupat_holim'])]"
+                                   context="{'invisible_country': True}"
+                                   options="{'no_create': True}"/>
+                            <field name="reference"/>
+                            <field name="claim_status" invisible="payment_source != 'insurance'"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="expected_amount"/>
+                            <field name="received_amount"/>
+                            <field name="balance"/>
+                            <field name="status" widget="badge"
+                                   decoration-success="status == 'paid'"
+                                   decoration-warning="status == 'partial'"
+                                   decoration-danger="status == 'unpaid'"/>
+                            <field name="payment_date"/>
+                        </group>
+                    </group>
+                    <group invisible="payment_source != 'client'">
+                        <group>
+                            <field name="invoice_id"/>
+                            <field name="payment_id"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Surgery Payment Line List View (embedded in surgery case) -->
+    <record id="view_surgery_payment_line_list" model="ir.ui.view">
+        <field name="name">surgery.payment.line.list</field>
+        <field name="model">surgery.payment.line</field>
+        <field name="priority">1</field>
+        <field name="arch" type="xml">
+            <list string="Payment Lines" editable="bottom"
+                  decoration-success="status == 'paid'"
+                  decoration-warning="status == 'partial'"
+                  decoration-danger="status == 'unpaid'">
+                <field name="payment_source"/>
+                <field name="partner_id" string="Company"
+                       domain="[('account_type', 'in', ['private_insurance', 'kupat_holim', 'operating_room'])]"
+                       options="{'no_create': True}"/>
+                <field name="reference" string="Claim #"/>
+                <field name="expected_amount" sum="Total Expected"/>
+                <field name="received_amount" sum="Total Received"/>
+                <field name="balance" sum="Total Balance"/>
+                <field name="status"/>
+                <field name="currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Indirect Payments List View (for reconciliation) -->
+    <record id="view_surgery_payment_line_indirect_list" model="ir.ui.view">
+        <field name="name">surgery.payment.line.indirect.list</field>
+        <field name="model">surgery.payment.line</field>
+        <field name="arch" type="xml">
+            <list string="Indirect Payments"
+                  decoration-success="status == 'paid'"
+                  decoration-warning="status == 'partial'"
+                  decoration-danger="status == 'unpaid'">
+                <field name="surgery_case_id" string="Case #"/>
+                <field name="patient_id" string="Client"/>
+                <field name="sale_order_id" string="SO #"/>
+                <field name="payment_source"/>
+                <field name="partner_id" string="Company"/>
+                <field name="reference" string="Claim #"/>
+                <field name="claim_status" string="Claim" widget="badge"
+                       decoration-success="claim_status == 'confirmed'"
+                       decoration-warning="claim_status == 'pending'"
+                       decoration-danger="claim_status == 'denied'"/>
+                <field name="expected_amount"/>
+                <field name="received_amount"/>
+                <field name="status" widget="badge"
+                       decoration-success="status == 'paid'"
+                       decoration-warning="status == 'partial'"
+                       decoration-danger="status == 'unpaid'"/>
+                <field name="reconciliation_invoice_id" string="Recon INV" optional="show"/>
+                <field name="payment_date"/>
+                <field name="currency_id" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Indirect Payments Search View -->
+    <record id="view_surgery_payment_line_indirect_search" model="ir.ui.view">
+        <field name="name">surgery.payment.line.indirect.search</field>
+        <field name="model">surgery.payment.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="patient_id"/>
+                <field name="partner_id"/>
+                <field name="sale_order_id"/>
+                <field name="reference"/>
+
+                <filter string="Insurance" name="insurance" domain="[('payment_source', '=', 'insurance')]"/>
+                <filter string="Surgicenter" name="surgicenter" domain="[('payment_source', '=', 'surgicenter')]"/>
+                <filter string="Not Reconciled" name="not_reconciled" domain="[('reconciliation_invoice_id', '=', False)]"/>
+                <filter string="Reconciled" name="reconciled" domain="[('reconciliation_invoice_id', '!=', False)]"/>
+
+                <separator/>
+                <filter string="Unpaid" name="unpaid" domain="[('status', '=', 'unpaid')]"/>
+                <filter string="Partial" name="partial" domain="[('status', '=', 'partial')]"/>
+                <filter string="Paid" name="paid" domain="[('status', '=', 'paid')]"/>
+
+                <separator/>
+                <filter string="Claim Pending" name="claim_pending" domain="[('claim_status', '=', 'pending')]"/>
+                <filter string="Claim Confirmed" name="claim_confirmed" domain="[('claim_status', '=', 'confirmed')]"/>
+                <filter string="Claim Denied" name="claim_denied" domain="[('claim_status', '=', 'denied')]"/>
+
+                <group string="Group By">
+                    <filter name="group_company" string="Company" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_source" string="Source" context="{'group_by': 'payment_source'}"/>
+                    <filter name="group_status" string="Payment Status" context="{'group_by': 'status'}"/>
+                    <filter name="group_claim_status" string="Claim Status" context="{'group_by': 'claim_status'}"/>
+                    <filter name="group_date" string="Payment Date" context="{'group_by': 'payment_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Surgery Payment Line Action -->
+    <record id="action_surgery_payment_line" model="ir.actions.act_window">
+        <field name="name">Payment Lines</field>
+        <field name="res_model">surgery.payment.line</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Indirect Payments Action -->
+    <record id="action_indirect_payments" model="ir.actions.act_window">
+        <field name="name">Indirect Payments</field>
+        <field name="res_model">surgery.payment.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('payment_source', 'in', ['insurance', 'surgicenter'])]</field>
+        <field name="context">{'search_default_group_company': 1, 'search_default_not_reconciled': 1}</field>
+        <field name="search_view_id" ref="view_surgery_payment_line_indirect_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_surgery_payment_line_indirect_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_surgery_payment_line_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No indirect payments yet
+            </p>
+            <p>
+                Insurance claims and surgicenter payments will appear here for reconciliation.
+            </p>
+        </field>
+    </record>
+</odoo>

@@ -183,10 +183,54 @@ class SurgeryCase(models.Model):
         tracking=True
     )
 
+    so_status = fields.Selection([
+        ('no_so', 'No SO'),
+        ('draft', 'Draft'),
+        ('confirmed', 'Confirmed'),
+        ('payment_complete', 'Payment Complete')
+    ], compute='_compute_so_status', store=True, string='SO Status')
+
     deposit_paid = fields.Boolean(
         string='Deposit Paid',
         compute='_compute_deposit_paid',
         store=True
+    )
+
+    # ==================== PAYMENT TRACKING ====================
+    payment_line_ids = fields.One2many(
+        'surgery.payment.line',
+        'surgery_case_id',
+        string='Payment Lines'
+    )
+
+    sale_order_total = fields.Monetary(
+        related='sale_order_id.amount_total',
+        string='Sales Order Total',
+        readonly=True
+    )
+
+    payment_total_expected = fields.Monetary(
+        compute='_compute_payment_totals',
+        store=True,
+        string='Total Expected'
+    )
+
+    payment_total_received = fields.Monetary(
+        compute='_compute_payment_totals',
+        store=True,
+        string='Total Received'
+    )
+
+    payment_plan_valid = fields.Boolean(
+        compute='_compute_payment_plan_valid',
+        store=True,
+        string='Payment Plan Valid',
+        help='True if total expected equals sales order total'
+    )
+
+    payment_plan_warning = fields.Char(
+        compute='_compute_payment_plan_valid',
+        string='Payment Warning'
     )
 
     # ==================== INSURANCE ====================
@@ -362,6 +406,18 @@ class SurgeryCase(models.Model):
             else:
                 record.deposit_paid = False
 
+    @api.depends('sale_order_id', 'sale_order_id.state', 'payment_total_received', 'sale_order_total')
+    def _compute_so_status(self):
+        for record in self:
+            if not record.sale_order_id:
+                record.so_status = 'no_so'
+            elif record.sale_order_id.state in ['draft', 'sent']:
+                record.so_status = 'draft'
+            elif record.sale_order_total and abs(record.payment_total_received - record.sale_order_total) < 0.01:
+                record.so_status = 'payment_complete'
+            else:
+                record.so_status = 'confirmed'
+
     @api.depends('surgeon_employee_id.kupot_holim_ids', 'surgeon_employee_id.private_insurance_ids', 'insurance_company_id')
     def _compute_is_contracted_insurance(self):
         for record in self:
@@ -443,6 +499,30 @@ class SurgeryCase(models.Model):
             else:
                 record.medical_status = 'in_progress'
 
+    @api.depends('payment_line_ids.expected_amount', 'payment_line_ids.received_amount')
+    def _compute_payment_totals(self):
+        for record in self:
+            record.payment_total_expected = sum(record.payment_line_ids.mapped('expected_amount'))
+            record.payment_total_received = sum(record.payment_line_ids.mapped('received_amount'))
+
+    @api.depends('payment_total_expected', 'sale_order_total', 'sale_order_id', 'currency_id')
+    def _compute_payment_plan_valid(self):
+        for record in self:
+            if not record.sale_order_id:
+                record.payment_plan_valid = True
+                record.payment_plan_warning = ""
+            elif not record.payment_line_ids:
+                record.payment_plan_valid = False
+                record.payment_plan_warning = "No payment plan defined"
+            elif abs(record.payment_total_expected - record.sale_order_total) > 0.01:
+                diff = record.sale_order_total - record.payment_total_expected
+                symbol = record.currency_id.symbol or ''
+                record.payment_plan_valid = False
+                record.payment_plan_warning = f"Expected total differs from SO by {symbol}{diff:,.2f}"
+            else:
+                record.payment_plan_valid = True
+                record.payment_plan_warning = ""
+
     # ==================== ACTIONS ====================
 
     def action_confirm_medical(self):
@@ -483,6 +563,62 @@ class SurgeryCase(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
+
+    def action_sync_client_payments(self):
+        """Sync client payment lines from invoice payments"""
+        self.ensure_one()
+        if not self.sale_order_id:
+            raise UserError("No Sale Order linked to this surgery case.")
+
+        PaymentLine = self.env['surgery.payment.line']
+
+        # Get all payments on invoices linked to this SO
+        for invoice in self.sale_order_id.invoice_ids.filtered(lambda i: i.move_type == 'out_invoice'):
+            # Get payments reconciled with this invoice
+            for partial in invoice.line_ids.matched_debit_ids:
+                payment = partial.debit_move_id.payment_id
+                if payment:
+                    # Check if we already have this payment
+                    existing = PaymentLine.search([
+                        ('surgery_case_id', '=', self.id),
+                        ('payment_id', '=', payment.id)
+                    ])
+                    if not existing:
+                        PaymentLine.create({
+                            'surgery_case_id': self.id,
+                            'payment_source': 'client',
+                            'payment_id': payment.id,
+                            'invoice_id': invoice.id,
+                            'expected_amount': payment.amount,
+                            'received_amount': payment.amount,
+                            'payment_date': payment.date,
+                            'reference': payment.name,
+                        })
+
+        self.message_post(body="Client payments synced from invoices")
+        return True
+
+    def _ensure_surgicenter_line(self):
+        """Create or update surgicenter payment line for external surgeries"""
+        PaymentLine = self.env['surgery.payment.line']
+        for record in self:
+            existing = PaymentLine.search([
+                ('surgery_case_id', '=', record.id),
+                ('payment_source', '=', 'surgicenter')
+            ], limit=1)
+
+            if record.surgery_location == 'external' and record.surgicenter_id:
+                if not existing:
+                    PaymentLine.create({
+                        'surgery_case_id': record.id,
+                        'payment_source': 'surgicenter',
+                        'partner_id': record.surgicenter_id.id,
+                    })
+                else:
+                    existing.partner_id = record.surgicenter_id.id
+            elif existing:
+                # Remove surgicenter line if no longer external
+                existing.unlink()
 
     def action_create_medical_checklist(self):
         """Manually create/recreate medical checklist items based on patient age"""
@@ -543,7 +679,19 @@ class SurgeryCase(models.Model):
         # Auto-create medical checklist items
         record._create_medical_checklist_items()
 
+        # Auto-create surgicenter line if external surgery
+        record._ensure_surgicenter_line()
+
         return record
+
+    def write(self, vals):
+        result = super().write(vals)
+
+        # Auto-create/update surgicenter line if surgery location or surgicenter changed
+        if 'surgery_location' in vals or 'surgicenter_id' in vals:
+            self._ensure_surgicenter_line()
+
+        return result
 
     @api.model
     def _read_group_stage_ids(self, stages, domain):
