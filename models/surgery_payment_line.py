@@ -113,15 +113,29 @@ class SurgeryPaymentLine(models.Model):
         store=True
     )
 
+    # Dynamic domain for partner_id based on payment_source (works per-row in list views)
+    partner_id_domain = fields.Char(
+        compute='_compute_partner_id_domain',
+        readonly=True,
+        store=False
+    )
+
+    @api.depends('payment_source')
+    def _compute_partner_id_domain(self):
+        """Compute dynamic domain for partner_id based on payment source"""
+        for line in self:
+            if line.payment_source == 'insurance':
+                line.partner_id_domain = "[('account_type', 'in', ['private_insurance', 'kupat_holim'])]"
+            elif line.payment_source == 'surgicenter':
+                line.partner_id_domain = "[('account_type', '=', 'operating_room')]"
+            else:
+                # Client source - no company applicable
+                line.partner_id_domain = "[('id', '=', False)]"
+
     @api.onchange('payment_source')
     def _onchange_payment_source(self):
-        """Clear partner and return appropriate domain when source changes"""
+        """Clear partner when source changes"""
         self.partner_id = False
-        if self.payment_source == 'insurance':
-            return {'domain': {'partner_id': [('account_type', 'in', ['private_insurance', 'kupat_holim'])]}}
-        elif self.payment_source == 'surgicenter':
-            return {'domain': {'partner_id': [('account_type', '=', 'operating_room')]}}
-        return {'domain': {'partner_id': []}}
 
     @api.depends('expected_amount', 'received_amount')
     def _compute_balance(self):

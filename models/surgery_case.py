@@ -116,7 +116,7 @@ class SurgeryCase(models.Model):
     surgicenter_id = fields.Many2one(
         'res.partner',
         string='Surgical Center',
-        domain=[('is_surgicenter', '=', True)],
+        domain=[('account_type', '=', 'operating_room')],
         tracking=True
     )
 
@@ -204,9 +204,11 @@ class SurgeryCase(models.Model):
     )
 
     sale_order_total = fields.Monetary(
-        related='sale_order_id.amount_total',
+        compute='_compute_sale_order_total',
+        store=True,
         string='Sales Order Total',
-        readonly=True
+        readonly=True,
+        help='Total excluding informational lines (e.g., surgicenter fees)'
     )
 
     payment_total_expected = fields.Monetary(
@@ -380,16 +382,15 @@ class SurgeryCase(models.Model):
 
             record.demographics_display = ' | '.join(parts) if parts else ''
 
-    @api.depends('sale_order_id.state', 'sale_order_id.invoice_ids.payment_state',
-                 'insurance_company_id', 'insurance_claim_status')
+    @api.depends('sale_order_id.state', 'payment_plan_valid', 'deposit_paid')
     def _compute_financial_status(self):
         for record in self:
             if not record.sale_order_id or record.sale_order_id.state not in ['sale', 'done']:
                 record.financial_status = 'incomplete'
+            elif not record.payment_plan_valid:
+                # Payment plan doesn't match SO total
+                record.financial_status = 'incomplete'
             elif not record.deposit_paid:
-                record.financial_status = 'pending'
-            elif record.insurance_company_id and record.is_contracted_insurance and \
-                 record.insurance_claim_status != 'authorized':
                 record.financial_status = 'pending'
             else:
                 record.financial_status = 'approved'
@@ -499,6 +500,19 @@ class SurgeryCase(models.Model):
             else:
                 record.medical_status = 'in_progress'
 
+    @api.depends('sale_order_id.order_line.price_subtotal', 'sale_order_id.order_line.is_informational')
+    def _compute_sale_order_total(self):
+        """Calculate SO total excluding informational lines (e.g., surgicenter fees)"""
+        for record in self:
+            if record.sale_order_id:
+                # Sum only non-informational lines
+                billable_lines = record.sale_order_id.order_line.filtered(
+                    lambda l: not l.is_informational and l.display_type not in ['line_section', 'line_note']
+                )
+                record.sale_order_total = sum(billable_lines.mapped('price_total'))
+            else:
+                record.sale_order_total = 0
+
     @api.depends('payment_line_ids.expected_amount', 'payment_line_ids.received_amount')
     def _compute_payment_totals(self):
         for record in self:
@@ -571,31 +585,43 @@ class SurgeryCase(models.Model):
             raise UserError("No Sale Order linked to this surgery case.")
 
         PaymentLine = self.env['surgery.payment.line']
+        synced_count = 0
 
-        # Get all payments on invoices linked to this SO
+        # Get all invoices linked to this SO
         for invoice in self.sale_order_id.invoice_ids.filtered(lambda i: i.move_type == 'out_invoice'):
-            # Get payments reconciled with this invoice
-            for partial in invoice.line_ids.matched_debit_ids:
-                payment = partial.debit_move_id.payment_id
-                if payment:
-                    # Check if we already have this payment
-                    existing = PaymentLine.search([
-                        ('surgery_case_id', '=', self.id),
-                        ('payment_id', '=', payment.id)
-                    ])
-                    if not existing:
-                        PaymentLine.create({
-                            'surgery_case_id': self.id,
-                            'payment_source': 'client',
-                            'payment_id': payment.id,
-                            'invoice_id': invoice.id,
-                            'expected_amount': payment.amount,
-                            'received_amount': payment.amount,
-                            'payment_date': payment.date,
-                            'reference': payment.name,
-                        })
+            # Get receivable lines only (these are the ones that get paid)
+            receivable_lines = invoice.line_ids.filtered(
+                lambda l: l.account_id.account_type == 'asset_receivable'
+            )
 
-        self.message_post(body="Client payments synced from invoices")
+            # Get payments reconciled with these receivable lines
+            for line in receivable_lines:
+                for partial in line.matched_debit_ids:
+                    payment = partial.debit_move_id.payment_id
+                    if payment:
+                        # Check if we already have this payment
+                        existing = PaymentLine.search([
+                            ('surgery_case_id', '=', self.id),
+                            ('payment_id', '=', payment.id)
+                        ])
+                        if not existing:
+                            PaymentLine.create({
+                                'surgery_case_id': self.id,
+                                'payment_source': 'client',
+                                'payment_id': payment.id,
+                                'invoice_id': invoice.id,
+                                'expected_amount': payment.amount,
+                                'received_amount': payment.amount,
+                                'payment_date': payment.date,
+                                'reference': payment.name,
+                                'status': 'paid',  # Payment received = paid
+                            })
+                            synced_count += 1
+
+        if synced_count:
+            self.message_post(body=f"Synced {synced_count} client payment(s) from invoices")
+        else:
+            self.message_post(body="No new payments to sync")
         return True
 
     def _ensure_surgicenter_line(self):

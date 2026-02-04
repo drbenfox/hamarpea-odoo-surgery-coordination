@@ -9,14 +9,9 @@
 
             <!-- Add Surgical Center section in Sales & Purchase tab -->
             <xpath expr="//page[@name='sales_purchases']" position="inside">
-                <group string="Surgical Center" name="surgical_center" invisible="not is_surgicenter">
+                <group string="Surgical Center" name="surgical_center" invisible="account_type != 'operating_room'">
                     <field name="processing_fee_pct"/>
                 </group>
-            </xpath>
-
-            <!-- Add is_surgicenter checkbox after is_company -->
-            <xpath expr="//field[@name='is_company']" position="after">
-                <field name="is_surgicenter"/>
             </xpath>
 
         </field>

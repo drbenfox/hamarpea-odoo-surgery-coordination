@@ -63,10 +63,6 @@
                             <field name="medical_status" widget="badge" decoration-success="medical_status == 'confirmed'" decoration-warning="medical_status == 'review_needed'"/>
                             <field name="financial_status" widget="badge" decoration-success="financial_status == 'approved'" decoration-warning="financial_status == 'pending'"/>
                         </group>
-                        <group>
-                            <field name="ready_for_scheduling" widget="boolean"/>
-                            <field name="ready_for_surgery" widget="boolean"/>
-                        </group>
                     </group>
 
                     <notebook>
@@ -78,24 +74,21 @@
                             <!-- Sale Order Section -->
                             <group>
                                 <group string="Sale Order">
-                                    <field name="sale_order_id"/>
+                                    <field name="sale_order_id"
+                                           domain="[('partner_id', '=', partner_id)]"
+                                           context="{'default_partner_id': partner_id}"/>
                                     <field name="sale_order_total" invisible="not sale_order_id"/>
                                     <field name="so_status" widget="badge" invisible="not sale_order_id"
                                            decoration-muted="so_status == 'no_so'"
                                            decoration-info="so_status == 'draft'"
                                            decoration-warning="so_status == 'confirmed'"
                                            decoration-success="so_status == 'payment_complete'"/>
-                                </group>
-                                <group string="Insurance">
-                                    <label for="insurance_company_id"/>
-                                    <div class="o_row">
-                                        <field name="insurance_company_id" class="oe_inline" options="{'no_create': True}"/>
-                                        <field name="insurance_privilege_warning" invisible="1"/>
-                                        <span invisible="not insurance_privilege_warning" class="text-warning" title="Surgeon does not have privileges with this insurance company">
-                                            <i class="fa fa-exclamation-triangle fa-lg"/>
-                                        </span>
-                                    </div>
-                                    <field name="is_contracted_insurance" readonly="1" invisible="not insurance_company_id"/>
+                                    <button name="action_sync_client_payments"
+                                            string="Sync Client Payments"
+                                            type="object"
+                                            class="btn-secondary"
+                                            icon="fa-refresh"
+                                            invisible="not sale_order_id"/>
                                 </group>
                             </group>
 
@@ -107,12 +100,6 @@
 
                             <!-- Payment Lines -->
                             <group string="Payment Plan">
-                                <button name="action_sync_client_payments"
-                                        string="Sync Client Payments"
-                                        type="object"
-                                        class="btn-secondary mb-2"
-                                        icon="fa-refresh"
-                                        invisible="not sale_order_id"/>
                                 <field name="payment_line_ids" nolabel="1"
                                        context="{'list_view_ref': 'hamarpea-odoo-surgery-coordination.view_surgery_payment_line_list'}"/>
                             </group>
@@ -155,6 +142,15 @@
 
                         <!-- Tab 3: Booking -->
                         <page string="Booking" name="booking">
+                            <!-- Ready for Surgery indicator -->
+                            <div class="alert alert-success" role="alert" invisible="not ready_for_surgery">
+                                <i class="fa fa-check-circle"/> <strong>Ready for Surgery</strong> - Medical and financial clearance complete
+                            </div>
+                            <div class="alert alert-warning" role="alert" invisible="ready_for_surgery">
+                                <i class="fa fa-clock-o"/> <strong>Not Ready</strong> - Waiting for medical and/or financial clearance
+                            </div>
+                            <field name="ready_for_surgery" invisible="1"/>
+
                             <group>
                                 <group string="Surgery Details">
                                     <field name="surgery_date"/>
@@ -192,7 +188,6 @@
                 <field name="surgery_product_id"/>
                 <field name="medical_status"/>
                 <field name="financial_status"/>
-                <field name="ready_for_scheduling"/>
                 <field name="ready_for_surgery"/>
                 <field name="stage_id"/>
                 <field name="so_status"/>
@@ -225,10 +220,13 @@
 
                                 <div class="o_kanban_record_bottom">
                                     <div class="oe_kanban_bottom_left">
-                                        <span t-if="record.so_status.raw_value == 'payment_complete'" class="badge rounded-pill text-bg-success">Paid</span>
-                                        <span t-elif="record.so_status.raw_value == 'confirmed'" class="badge rounded-pill text-bg-warning">SO Confirmed</span>
-                                        <span t-elif="record.so_status.raw_value == 'draft'" class="badge rounded-pill text-bg-secondary">SO Draft</span>
-                                        <span t-if="record.medical_status.raw_value == 'review_needed'" class="badge rounded-pill text-bg-danger ms-1">Medical Review</span>
+                                        <!-- Financial Status -->
+                                        <span t-if="record.financial_status.raw_value == 'approved'" class="badge rounded-pill text-bg-success">Financial OK</span>
+                                        <span t-elif="record.financial_status.raw_value == 'pending'" class="badge rounded-pill text-bg-warning">Pending</span>
+                                        <span t-elif="record.financial_status.raw_value == 'incomplete'" class="badge rounded-pill text-bg-secondary">Incomplete</span>
+                                        <!-- Medical Status -->
+                                        <span t-if="record.medical_status.raw_value == 'confirmed'" class="badge rounded-pill text-bg-success ms-1">Medical OK</span>
+                                        <span t-elif="record.medical_status.raw_value == 'review_needed'" class="badge rounded-pill text-bg-danger ms-1">Medical Review</span>
                                     </div>
                                     <div class="oe_kanban_bottom_right">
                                         <field name="surgeon_user_id" widget="many2one_avatar_user"/>
@@ -257,7 +255,6 @@
                 <field name="stage_id"/>
                 <field name="medical_status" widget="badge" decoration-success="medical_status == 'confirmed'" decoration-warning="medical_status == 'review_needed'"/>
                 <field name="financial_status" widget="badge" decoration-success="financial_status == 'approved'" decoration-warning="financial_status == 'pending'"/>
-                <field name="ready_for_scheduling" widget="boolean"/>
                 <field name="ready_for_surgery" widget="boolean"/>
             </list>
         </field>
@@ -276,7 +273,6 @@
                 <field name="stage_id"/>
 
                 <filter string="My Cases" name="my_cases" domain="[('coordinator_id', '=', uid)]"/>
-                <filter string="Ready to Schedule" name="ready_to_schedule" domain="[('ready_for_scheduling', '=', True)]"/>
                 <filter string="Ready for Surgery" name="ready_for_surgery" domain="[('ready_for_surgery', '=', True)]"/>
                 <filter string="Medical Review Needed" name="medical_review" domain="[('medical_status', '=', 'review_needed')]"/>
 

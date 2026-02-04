@@ -11,10 +11,10 @@
                         <group>
                             <field name="surgery_case_id" invisible="1"/>
                             <field name="payment_source"/>
+                            <field name="partner_id_domain" invisible="1"/>
                             <field name="partner_id"
                                    invisible="payment_source == 'client'"
-                                   domain="[('account_type', 'in', ['private_insurance', 'kupat_holim'])]"
-                                   context="{'invisible_country': True}"
+                                   domain="partner_id_domain"
                                    options="{'no_create': True}"/>
                             <field name="reference"/>
                             <field name="claim_status" invisible="payment_source != 'insurance'"/>
@@ -53,10 +53,11 @@
                   decoration-warning="status == 'partial'"
                   decoration-danger="status == 'unpaid'">
                 <field name="payment_source"/>
+                <field name="partner_id_domain" column_invisible="1"/>
                 <field name="partner_id" string="Company"
-                       domain="[('account_type', 'in', ['private_insurance', 'kupat_holim', 'operating_room'])]"
-                       options="{'no_create': True}"/>
-                <field name="reference" string="Claim #"/>
+                       domain="partner_id_domain"
+                       options="{'no_create': True, 'no_open': True}"/>
+                <field name="reference" string="Ref #"/>
                 <field name="expected_amount" sum="Total Expected"/>
                 <field name="received_amount" sum="Total Received"/>
                 <field name="balance" sum="Total Balance"/>
