@@ -18,6 +18,7 @@ Track patient journey through surgery with:
     'depends': [
         'base',
         'sale',
+        'sale_project',  # Provides service_tracking field on product.template
         'crm',
         'calendar',
         'mail',
