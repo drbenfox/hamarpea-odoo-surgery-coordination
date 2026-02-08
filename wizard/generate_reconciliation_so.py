@@ -162,6 +162,17 @@ class GenerateReconciliationInvoice(models.TransientModel):
         })
         payment_register.action_create_payments()
 
+        # Update payment lines as paid
+        for payment_line in self.payment_line_ids:
+            vals = {
+                'status': 'paid',
+                'payment_date': fields.Date.context_today(self),
+            }
+            # If no received amount entered, use expected amount
+            if not payment_line.received_amount:
+                vals['received_amount'] = payment_line.expected_amount
+            payment_line.write(vals)
+
         # Open the created Invoice
         return {
             'type': 'ir.actions.act_window',
